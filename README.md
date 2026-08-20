@@ -13,11 +13,19 @@ npm run dev
 
 打开终端输出的本地地址即可预览编辑器。当前浏览器预览会保留界面状态；选择作品目录、创建项目和保存快照等本地文件操作需要通过 Tauri 桌面壳运行。
 
+安装 Rust 与 Tauri 2 的系统依赖后，可运行完整桌面版：
+
+```bash
+npm run desktop
+```
+
 ## 常用命令
 
 ```bash
 npm run typecheck   # TypeScript 类型检查
 npm run build       # 生产构建，输出到 apps/desktop/dist
+npm run desktop     # 启动 Tauri 桌面开发版
+npm run desktop:build # 构建桌面安装包
 ```
 
 ## 当前能力

@@ -4,6 +4,8 @@
   "scripts": {
     "dev": "npm --prefix apps/desktop run dev",
     "build": "npm --prefix apps/desktop run build",
-    "typecheck": "npm --prefix apps/desktop run typecheck"
+    "typecheck": "npm --prefix apps/desktop run typecheck",
+    "desktop": "npm --prefix apps/desktop run tauri:dev",
+    "desktop:build": "npm --prefix apps/desktop run tauri:build"
   }
 }
