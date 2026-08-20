@@ -4,7 +4,9 @@
 
 ## 快速开始
 
-环境要求：Node.js 18+、npm；如果要运行桌面壳，还需要 Rust 和 Tauri 2 的系统依赖。
+### 开发者运行
+
+开发环境需要 Node.js 18+ 和 npm。只有编译或调试桌面壳时才需要 Rust stable-msvc；Tauri CLI 已作为项目开发依赖安装，不需要全局安装。
 
 ```bash
 npm install --prefix apps/desktop
@@ -13,7 +15,7 @@ npm run dev
 
 打开终端输出的本地地址即可预览编辑器。当前浏览器预览会保留界面状态；选择作品目录、创建项目和保存快照等本地文件操作需要通过 Tauri 桌面壳运行。
 
-安装 Rust 与 Tauri 2 的系统依赖后，可运行完整桌面版：
+运行完整桌面开发版：
 
 ```bash
 npm run desktop
@@ -27,6 +29,10 @@ npm run build       # 生产构建，输出到 apps/desktop/dist
 npm run desktop     # 启动 Tauri 桌面开发版
 npm run desktop:build # 构建桌面安装包
 ```
+
+### 最终用户安装
+
+最终用户只需安装 `npm run desktop:build` 生成的 Windows 安装包，不需要安装 Node.js、Rust、Cargo 或 Tauri。Windows WebView2 运行时通常随系统提供；安装包也可以按发布配置负责引导安装缺失的运行时。
 
 ## 当前能力
 
