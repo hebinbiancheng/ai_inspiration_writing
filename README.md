@@ -1,6 +1,6 @@
 # AI 小说创作工作台
 
-一个本地优先的 AI 小说创作工作台初始使用版，当前包含 React + Vite 编辑器界面，以及 Tauri/Rust 本地项目存储骨架。
+本地优先的 AI 小说创作工作台。当前最小 demo：工作台首页 + 三栏写作 + OpenAI 兼容续写（接受前自动快照）。产品窗口名是「灵感」。
 
 ## 快速开始
 
@@ -13,9 +13,9 @@ npm install --prefix apps/desktop
 npm run dev
 ```
 
-打开终端输出的本地地址即可预览编辑器。当前浏览器预览会保留界面状态；选择作品目录、创建项目和保存快照等本地文件操作需要通过 Tauri 桌面壳运行。
+打开终端输出的本地地址即可预览界面。浏览器预览能看首页和布局；选择作品目录、凭据、保存和续写需要桌面壳。
 
-运行完整桌面开发版：
+运行完整桌面开发版（验收闭环用这条）：
 
 ```bash
 npm run desktop
@@ -36,20 +36,23 @@ npm run desktop:build # 构建桌面安装包
 
 ## 当前能力
 
-- 三栏写作工作台：作品结构、富文本稿件、AI 协作面板。
-- TipTap 编辑器，可直接编辑当前章节内容。
-- “创建快照”调用 Rust `save_document` 命令保存章节 JSON。
-- “新建作品”调用 Rust `create_project` 命令初始化本地作品目录。
-- 浏览器预览模式：未连接 Tauri 时会显示明确的预览状态。
+- 工作台首页：最近作品、新建、打开、模型配置状态。
+- 三栏写作台：章节增删改、TipTap 正文、停笔约 1 秒自动保存。
+- API Key 写入 Windows 凭据管理器；作品目录不落密钥。
+- 续写走 OpenAI 兼容 `chat/completions`（含 Ollama `/v1`）；Rust 内拼接流式响应，界面一次显示完整候选。
+- 接受候选前自动快照，拒绝不清正文。
+- 未配置模型时仍可写作。浏览器预览会提示需要桌面应用。
 
 ## 目录结构
 
 - `apps/desktop/`：桌面应用前端与 Tauri 壳。
-- `packages/domain/`：作品、章节等领域类型。
-- `packages/model-gateway/`：模型供应商统一接口骨架。
+- `packages/domain/`：与磁盘 `manifest.json` 对齐的领域类型。
+- `packages/model-gateway/`：OpenAI 兼容请求类型；HTTP 在 Rust。
 - `prototype/`：早期交互原型。
-- `docs/`：设计与决策文档。
+- `docs/superpowers/`：规格与实现计划。
 
 ## 已知限制
 
-AI 生成目前是界面占位流程，尚未连接 Ollama/OpenAI；作品列表和章节树仍使用演示数据。后续接入模型网关和持久化索引后即可扩展为完整工作流。
+本轮最小 demo 不做：灵感追问、作品资料/大纲、审阅、导入导出、SQLite 搜索、流式 UI/取消、Ollama 原生 `/api/generate`、原生透明窗口、作品概览、回收站。
+
+规格：`docs/superpowers/specs/2026-08-21-minimum-demo-design.md`
