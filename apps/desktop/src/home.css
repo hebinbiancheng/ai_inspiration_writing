@@ -1,0 +1,21 @@
+.back-home{border:0;background:transparent;color:#687694;font-size:24px;cursor:pointer;margin-right:2px}
+.home-content{width:min(1060px,100%);margin:0 auto;overflow:auto;padding:48px 22px 80px}
+.home-hero{max-width:680px}
+.home-hero .eyebrow{letter-spacing:.14em;margin:0 0 16px;color:#6b63d8}
+.home-hero h1{font-size:42px;line-height:1.16;letter-spacing:-.04em;margin:0 0 14px;color:#1e2b49}
+.home-hero>p:not(.eyebrow){font-size:16px;line-height:1.8;color:#687694;max-width:540px}
+.home-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:40px}
+.home-card{padding:26px;border:1px solid #ffffffc7;border-radius:22px;background:#ffffff8c;box-shadow:0 18px 45px #52648c1a}
+.home-card.primary{background:linear-gradient(135deg,#ebeaffd9,#ffffff99)}
+.home-card>span{display:grid;place-items:center;width:38px;height:38px;border-radius:12px;background:#e2e4ff;color:#5d62df;font-size:20px}
+.home-card h3{font-size:19px;margin:22px 0 8px}
+.home-card p{color:#7482a1;font-size:14px;min-height:42px}
+.home-card .button{margin-top:12px}
+.home-recent{margin-top:48px}
+.home-recent h2{font-size:20px;margin:0}
+.home-recent .section-heading{align-items:center}
+.recent-item{width:100%;display:flex;align-items:center;gap:14px;text-align:left;margin-top:14px;padding:18px;border:1px solid #ffffffc7;border-radius:16px;background:#ffffff8c;color:#263453;cursor:pointer}
+.recent-item span:nth-child(2){display:flex;flex-direction:column;gap:5px;flex:1;min-width:0}
+.recent-item small{color:#8691a8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.modal-hint{font-size:13px;line-height:1.6;color:#7482a1;margin-top:-8px}
+.modal-actions{flex-wrap:wrap}
