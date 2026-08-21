@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import type { ModelProfile } from "@gateway";
+import type { AppSettings } from "@gateway";
+import { activeProfile, emptySettings, isProfileConfigured } from "@gateway";
 import type { ProjectManifest } from "@domain";
 import { isDesktop } from "./desktop";
 import { HomeView } from "./HomeView";
@@ -10,20 +11,19 @@ import type { Project } from "./project";
 
 export function App() {
   const [view, setView] = useState<"home" | "workbench">("home");
-  const [glass, setGlass] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [recents, setRecents] = useState<Project[]>([]);
   const [current, setCurrent] = useState<Project | null>(null);
-  const [profile, setProfile] = useState<ModelProfile | null>(null);
+  const [settings, setSettings] = useState<AppSettings>(emptySettings());
 
-  const configured = Boolean(profile?.base_url && profile?.model);
-  const modelLabel = profile?.model ?? "";
+  const profile = activeProfile(settings);
+  const configured = isProfileConfigured(profile);
+  const modelLabel = profile ? (profile.name && profile.name !== profile.model ? `${profile.name} / ${profile.model}` : profile.model) : "";
 
   useEffect(() => {
     if (!isDesktop()) return;
     void (async () => {
-      const saved = await invoke<ModelProfile | null>("profile_read");
-      setProfile(saved);
+      setSettings(await invoke<AppSettings>("settings_read"));
       const roots = await invoke<string[]>("list_recent_projects");
       const loaded: Project[] = [];
       for (const root of roots) {
@@ -49,6 +49,7 @@ export function App() {
           recents={recents}
           modelLabel={modelLabel}
           configured={configured}
+          worksDir={settings.works_dir}
           onOpenSettings={() => setSettingsOpen(true)}
           onOpenProject={openProject}
           onRecentsChange={setRecents}
@@ -56,10 +57,9 @@ export function App() {
       ) : (
         <WorkbenchView
           project={current}
+          profileId={profile?.id ?? ""}
           modelLabel={configured ? modelLabel : "未配置"}
           configured={configured}
-          glass={glass}
-          onToggleGlass={() => setGlass((value) => !value)}
           onOpenSettings={() => setSettingsOpen(true)}
           onBackHome={() => setView("home")}
           onProjectChange={(project) => {
@@ -71,7 +71,7 @@ export function App() {
       <SettingsDialog
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
-        onSaved={(next) => { setProfile(next); }}
+        onSaved={setSettings}
       />
     </>
   );

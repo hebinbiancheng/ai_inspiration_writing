@@ -1,5 +1,3 @@
-export const PROFILE_ID = "default";
-
 export function isDesktop(): boolean {
   return "__TAURI_INTERNALS__" in window;
 }

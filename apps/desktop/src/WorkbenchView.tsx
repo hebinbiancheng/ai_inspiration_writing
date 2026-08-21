@@ -1,36 +1,55 @@
 import { useEffect, useRef, useState } from "react";
+import { MagnifyingGlass, Plus } from "@phosphor-icons/react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import type { ProjectManifest } from "@domain";
-import { PROFILE_ID, desktopHint, isDesktop } from "./desktop";
+import { desktopHint, isDesktop } from "./desktop";
 import { buildContinuePrompt } from "./continuePrompt";
+import { AppPrompt } from "./AppPrompt";
+import { DashboardPane } from "./DashboardPane";
+import { KnowledgePane } from "./KnowledgePane";
+import { TitleBar } from "./TitleBar";
+import { KNOWLEDGE_PAGES, knowledgePath, type KnowledgeDocument, type KnowledgeKind } from "./knowledge";
 import type { Project } from "./project";
 
 type Props = {
   project: Project;
+  profileId: string;
   modelLabel: string;
   configured: boolean;
-  glass: boolean;
-  onToggleGlass: () => void;
   onOpenSettings: () => void;
   onBackHome: () => void;
   onProjectChange: (project: Project) => void;
 };
 
+type Pane = "dashboard" | "chapter" | KnowledgeKind;
+
 const emptyChapterHtml = (title: string) => `<h2>${title}</h2><p>从这里开始写作……</p>`;
 
-export function WorkbenchView({ project, modelLabel, configured, glass, onToggleGlass, onOpenSettings, onBackHome, onProjectChange }: Props) {
+function emptyKnowledge(): Record<KnowledgeKind, string> {
+  return Object.fromEntries(KNOWLEDGE_PAGES.map((page) => [page.id, ""])) as Record<KnowledgeKind, string>;
+}
+
+export function WorkbenchView({ project, profileId, modelLabel, configured, onOpenSettings, onBackHome, onProjectChange }: Props) {
+  const [pane, setPane] = useState<Pane>("dashboard");
   const [chapterIndex, setChapterIndex] = useState(0);
   const [draft, setDraft] = useState("");
   const [saveState, setSaveState] = useState(project.root ? "已打开作品" : desktopHint());
   const [candidate, setCandidate] = useState("");
   const [candidateMode, setCandidateMode] = useState("尚无候选");
   const [busy, setBusy] = useState(false);
+  const [knowledge, setKnowledge] = useState<Record<KnowledgeKind, string>>(emptyKnowledge);
+  const [goalDraft, setGoalDraft] = useState("");
+  const [prompt, setPrompt] = useState<"add-chapter" | "rename-chapter" | "delete-chapter" | "new-title" | "preview" | "find" | null>(null);
+  const [promptValue, setPromptValue] = useState("");
+  const [pendingOpenRoot, setPendingOpenRoot] = useState("");
   const saveTimer = useRef<number | undefined>(undefined);
+  const knowledgeTimer = useRef<number | undefined>(undefined);
   const chapters = project.manifest.chapters;
   const currentChapter = chapters[chapterIndex] ?? chapters[0];
+  const knowledgePage = KNOWLEDGE_PAGES.find((page) => page.id === pane);
 
   const editor = useEditor({
     extensions: [StarterKit],
@@ -46,29 +65,53 @@ export function WorkbenchView({ project, modelLabel, configured, glass, onToggle
     if (editor && currentChapter) void loadChapter();
   }, [project.root, chapterIndex, editor, currentChapter?.id]);
 
+  useEffect(() => {
+    setGoalDraft(currentChapter?.goal ?? "");
+  }, [currentChapter?.id, currentChapter?.goal]);
+
+  useEffect(() => {
+    void loadKnowledge();
+  }, [project.root]);
+
+  async function loadKnowledge() {
+    const next = emptyKnowledge();
+    if (!project.root || !isDesktop()) { setKnowledge(next); return; }
+    for (const page of KNOWLEDGE_PAGES) {
+      try {
+        const doc = await invoke<KnowledgeDocument | null>("read_document", { root: project.root, relativePath: knowledgePath(page.id) });
+        next[page.id] = doc?.content ?? "";
+      } catch {
+        next[page.id] = "";
+      }
+    }
+    setKnowledge(next);
+  }
+
   async function persistManifest(manifest: ProjectManifest) {
     if (!project.root) return;
     const saved = await invoke<ProjectManifest>("save_manifest", { root: project.root, manifest });
     onProjectChange({ ...project, manifest: saved });
   }
 
-  async function addChapter() {
-    const title = window.prompt("新章节名称", `第 ${String(chapters.length + 1).padStart(2, "0")} 章`)?.trim();
-    if (!title) return;
+  async function addChapter(title: string) {
     const chapter = { id: `chapter-${Date.now()}`, title, goal: "" };
     await persistManifest({ ...project.manifest, chapters: [...chapters, chapter] });
     setChapterIndex(chapters.length);
+    setPane("chapter");
   }
 
-  async function renameChapter() {
+  async function renameChapter(title: string) {
     if (!currentChapter) return;
-    const title = window.prompt("重命名章节", currentChapter.title)?.trim();
-    if (!title) return;
     await persistManifest({ ...project.manifest, chapters: chapters.map((chapter) => chapter.id === currentChapter.id ? { ...chapter, title } : chapter) });
   }
 
+  async function saveGoal(goal: string) {
+    if (!currentChapter) return;
+    await persistManifest({ ...project.manifest, chapters: chapters.map((chapter) => chapter.id === currentChapter.id ? { ...chapter, goal } : chapter) });
+  }
+
   async function removeChapter() {
-    if (!currentChapter || chapters.length <= 1 || !window.confirm(`删除“${currentChapter.title}”？此操作不可撤销。`)) return;
+    if (!currentChapter || chapters.length <= 1) return;
     if (project.root) await invoke("delete_chapter", { root: project.root, chapterId: currentChapter.id });
     await persistManifest({ ...project.manifest, chapters: chapters.filter((chapter) => chapter.id !== currentChapter.id) });
     setChapterIndex(Math.max(0, chapterIndex - 1));
@@ -106,6 +149,27 @@ export function WorkbenchView({ project, modelLabel, configured, glass, onToggle
     }
   }
 
+  function updateKnowledge(kind: KnowledgeKind, value: string) {
+    setKnowledge((current) => ({ ...current, [kind]: value }));
+    setSaveState("有未保存修改 · 刚刚");
+    window.clearTimeout(knowledgeTimer.current);
+    knowledgeTimer.current = window.setTimeout(() => void persistKnowledge(kind, value), 700);
+  }
+
+  async function persistKnowledge(kind: KnowledgeKind, content: string) {
+    if (!project.root) { setSaveState("浏览器预览 · 内容仅保留在当前页面"); return; }
+    try {
+      await invoke("save_document", {
+        root: project.root,
+        relativePath: knowledgePath(kind),
+        document: { schema_version: 1, kind, saved_at: new Date().toISOString(), content },
+      });
+      setSaveState("已自动保存 · 刚刚");
+    } catch (error) {
+      setSaveState(`保存失败 · ${String(error)}`);
+    }
+  }
+
   async function snapshot() {
     if (!editor || !currentChapter || !project.root) { setSaveState(project.root ? "没有可快照的正文" : desktopHint()); return; }
     try {
@@ -126,7 +190,16 @@ export function WorkbenchView({ project, modelLabel, configured, glass, onToggle
     setBusy(true);
     setCandidateMode("续写 · 生成中");
     try {
-      const text = await invoke<string>("ai_complete", { profileId: PROFILE_ID, prompt: buildContinuePrompt(draft, editor?.getText() ?? "") });
+      const text = await invoke<string>("ai_complete", {
+        profileId,
+        prompt: buildContinuePrompt({
+          instruction: draft,
+          chapterTitle: currentChapter?.title ?? "第 01 章",
+          chapterGoal: currentChapter?.goal ?? "",
+          chapterText: editor?.getText() ?? "",
+          knowledge,
+        }),
+      });
       setCandidate(text);
       setCandidateMode("续写候选");
     } catch (error) {
@@ -139,6 +212,7 @@ export function WorkbenchView({ project, modelLabel, configured, glass, onToggle
 
   async function acceptCandidate() {
     if (!editor || !candidate || !currentChapter) return;
+    setPane("chapter");
     if (project.root) {
       await invoke("snapshot_document", {
         root: project.root,
@@ -153,83 +227,206 @@ export function WorkbenchView({ project, modelLabel, configured, glass, onToggle
 
   async function openAnother() {
     if (!isDesktop()) { setSaveState(desktopHint()); return; }
-    const selected = await open({ directory: true, multiple: false, title: "打开或新建作品文件夹" });
+    const selected = await open({ directory: true, multiple: false, title: "打开已有作品文件夹" });
     if (typeof selected !== "string") return;
-    let manifest: ProjectManifest;
-    try { manifest = await invoke("read_manifest", { root: selected }); }
-    catch {
-      const title = window.prompt("作品名称", "未命名故事")?.trim();
-      if (!title) return;
-      manifest = await invoke("create_project", { root: selected, title, kind: "serial-novel" });
+    try {
+      const manifest = await invoke<ProjectManifest>("read_manifest", { root: selected });
+      await invoke("remember_project", { root: selected });
+      onProjectChange({ root: selected, manifest });
+      setChapterIndex(0);
+      setPane("dashboard");
+    } catch {
+      setPendingOpenRoot(selected);
+      setPromptValue("未命名故事");
+      setPrompt("new-title");
     }
-    await invoke("remember_project", { root: selected });
-    onProjectChange({ root: selected, manifest });
-    setChapterIndex(0);
   }
 
+  async function confirmNewInFolder() {
+    const title = promptValue.trim();
+    if (!title || !pendingOpenRoot) return;
+    const manifest = await invoke<ProjectManifest>("create_project", { root: pendingOpenRoot, title, kind: "serial-novel" });
+    await invoke("remember_project", { root: pendingOpenRoot });
+    onProjectChange({ root: pendingOpenRoot, manifest });
+    setChapterIndex(0);
+    setPane("dashboard");
+    setPrompt(null);
+  }
+
+  const contextLabel = pane === "dashboard" ? "作品概览" : knowledgePage ? knowledgePage.title : currentChapter?.title;
+
   return (
-    <main className={glass ? "app desktop-glass" : "app"}>
-      <header className="topbar">
-        <div className="brand">
-          <button className="back-home" onClick={onBackHome}>‹</button>
-          <span className="brand-mark">✦</span>
-          <span>灵感</span>
-        </div>
-        <div className="top-actions">
-          <button className="button" onClick={onToggleGlass}>◐ {glass ? "桌面玻璃" : "标准窗口"}</button>
-          <button className="icon-button" aria-label="设置" onClick={onOpenSettings}>⚙</button>
-        </div>
-      </header>
+    <main className="app">
+      <TitleBar showBack onBack={onBackHome} onOpenSettings={onOpenSettings} />
       <section className="workspace">
         <aside className="panel sidebar">
-          <div className="panel-heading"><strong>我的作品</strong><button className="icon-button" title="打开或新建作品" onClick={() => void openAnother()}>＋</button></div>
-          <button className="project active"><span className="dot blue" />{project.manifest.title}</button>
-          <div className="section-heading"><p className="eyebrow">作品结构</p><button onClick={() => void addChapter()}>＋ 章节</button></div>
-          {chapters.map((chapter, index) => (
-            <button className={`chapter ${index === chapterIndex ? "selected" : ""}`} key={chapter.id} onClick={() => setChapterIndex(index)}>{chapter.title}</button>
+          <div className="panel-heading"><strong>我的作品</strong><button className="icon-button" title="打开或新建作品" onClick={() => void openAnother()}><Plus size={16} weight="bold" /></button></div>
+          <button className="project active" onClick={() => setPane("dashboard")}><span className="dot blue" />{project.manifest.title}</button>
+          <button className={`chapter ${pane === "dashboard" ? "selected" : ""}`} onClick={() => setPane("dashboard")}>作品概览</button>
+          <div className="section-heading"><p className="eyebrow">作品资料</p></div>
+          {KNOWLEDGE_PAGES.map((page) => (
+            <button className={`chapter ${pane === page.id ? "selected" : ""}`} key={page.id} onClick={() => setPane(page.id)}>
+              {page.title}{knowledge[page.id]?.trim() ? "" : " ·"}
+            </button>
           ))}
-          <div className="chapter-actions">
-            <button onClick={() => void renameChapter()}>重命名</button>
-            <button onClick={() => void removeChapter()}>删除</button>
-          </div>
+          <div className="section-heading"><p className="eyebrow">作品结构</p><button onClick={() => { setPromptValue(`第 ${String(chapters.length + 1).padStart(2, "0")} 章`); setPrompt("add-chapter"); }}>＋ 章节</button></div>
+          {chapters.map((chapter, index) => (
+            <button className={`chapter ${pane === "chapter" && index === chapterIndex ? "selected" : ""}`} key={chapter.id} onClick={() => { setChapterIndex(index); setPane("chapter"); }}>{chapter.title}</button>
+          ))}
+          {pane === "chapter" ? (
+            <div className="chapter-actions">
+              <button onClick={() => { if (!currentChapter) return; setPromptValue(currentChapter.title); setPrompt("rename-chapter"); }}>重命名</button>
+              <button onClick={() => { if (!currentChapter || chapters.length <= 1) return; setPrompt("delete-chapter"); }}>删除</button>
+            </div>
+          ) : null}
         </aside>
         <section className="panel editor">
-          <div className="editor-head">
-            <div className="breadcrumbs">{project.manifest.title}</div>
-            <div className="title-row">
-              <div><h1>{currentChapter?.title}</h1><p>{currentChapter?.goal || "填写本章目标"}</p></div>
-              <button className="button" onClick={() => void snapshot()}>创建快照</button>
-            </div>
-            <div className="toolbar">
-              <button onClick={() => editor?.chain().focus().toggleBold().run()} className={editor?.isActive("bold") ? "active" : ""}><b>B</b></button>
-              <button onClick={() => editor?.chain().focus().toggleItalic().run()} className={editor?.isActive("italic") ? "active" : ""}><i>I</i></button>
-              <button onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}>H</button>
-              <button onClick={() => editor?.chain().focus().setParagraph().run()}>Aa</button>
-              <button onClick={() => editor?.chain().focus().toggleBulletList().run()}>≡</button>
-              <span className="toolbar-spacer" />
-              <button onClick={() => (window as unknown as { find: (text: string) => boolean }).find(window.prompt("查找正文") || "")}>⌕</button>
-            </div>
-          </div>
-          <div className="editor-scroll"><EditorContent className="manuscript" editor={editor} /></div>
-          <footer className="editor-footer"><span>{saveState}</span><span>{editor?.getText().length ?? 0} 字　· 作者创作</span></footer>
+          {pane === "dashboard" ? (
+            <DashboardPane
+              project={project}
+              knowledge={knowledge}
+              onOpenChapter={(index) => { setChapterIndex(index); setPane("chapter"); }}
+              onOpenKnowledge={(kind) => setPane(kind)}
+            />
+          ) : knowledgePage ? (
+            <KnowledgePane
+              page={knowledgePage}
+              value={knowledge[knowledgePage.id]}
+              saveState={saveState}
+              onChange={(value) => updateKnowledge(knowledgePage.id, value)}
+            />
+          ) : (
+            <>
+              <div className="editor-head">
+                <div className="breadcrumbs">{project.manifest.title} / 写作台</div>
+                <div className="title-row">
+                  <div>
+                    <h1>{currentChapter?.title}</h1>
+                    <input
+                      className="goal-input"
+                      value={goalDraft}
+                      placeholder="填写本章目标，续写时会遵守"
+                      onChange={(event) => setGoalDraft(event.target.value)}
+                      onBlur={() => { if (goalDraft !== (currentChapter?.goal ?? "")) void saveGoal(goalDraft); }}
+                    />
+                  </div>
+                  <button className="button" onClick={() => void snapshot()}>创建快照</button>
+                </div>
+                <div className="toolbar">
+                  <button onClick={() => editor?.chain().focus().toggleBold().run()} className={editor?.isActive("bold") ? "active" : ""}><b>B</b></button>
+                  <button onClick={() => editor?.chain().focus().toggleItalic().run()} className={editor?.isActive("italic") ? "active" : ""}><i>I</i></button>
+                  <button onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}>H</button>
+                  <button onClick={() => editor?.chain().focus().setParagraph().run()}>Aa</button>
+                  <button onClick={() => editor?.chain().focus().toggleBulletList().run()}>≡</button>
+                  <span className="toolbar-spacer" />
+                  <button onClick={() => { setPromptValue(""); setPrompt("find"); }} aria-label="查找正文"><MagnifyingGlass size={16} weight="regular" /></button>
+                </div>
+              </div>
+              <div className="editor-scroll"><EditorContent className="manuscript" editor={editor} /></div>
+              <footer className="editor-footer"><span>{saveState}</span><span>{editor?.getText().length ?? 0} 字　· 作者创作</span></footer>
+            </>
+          )}
         </section>
         <aside className="panel assistant">
           <div className="panel-heading"><strong>AI 协作</strong><span className="model-chip">{modelLabel || "未配置"}</span></div>
-          <p className="context">当前上下文：{currentChapter?.title}</p>
-          <div className="quick-actions"><button className="button" onClick={() => void generate()}>继续写</button></div>
-          <textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="告诉 AI 你想怎么续写…" />
-          <button className="generate" disabled={busy} onClick={() => void generate()}>{busy ? "生成中…" : "生成候选　↗"}</button>
-          <div className="suggestion">
-            <strong>{candidateMode}</strong>
-            <p>{candidate || "生成后会在这里一次显示完整候选。"}</p>
-            <div>
-              <button className="button" disabled={!candidate} onClick={() => window.alert(candidate)}>预览全文</button>
-              <button className="button" disabled={!candidate} onClick={() => void acceptCandidate()}>接受写入</button>
-              <button className="button" disabled={!candidate} onClick={() => { setCandidate(""); setCandidateMode("已拒绝"); }}>拒绝</button>
+          <p className="context">当前上下文：{contextLabel}</p>
+          {pane === "chapter" ? (
+            <>
+              <div className="quick-actions"><button className="button" onClick={() => void generate()}>继续写</button></div>
+              <textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="告诉 AI 你想怎么续写…" />
+              <button className="generate" disabled={busy} onClick={() => void generate()}>{busy ? "生成中…" : "生成候选"}</button>
+              <div className="suggestion">
+                <strong>{candidateMode}</strong>
+                <p>{candidate || "生成会带上大纲、世界观等已填资料。空白资料页不会发明设定。"}</p>
+                <div>
+                  <button className="button" disabled={!candidate} onClick={() => setPrompt("preview")}>预览全文</button>
+                  <button className="button" disabled={!candidate} onClick={() => void acceptCandidate()}>接受写入</button>
+                  <button className="button" disabled={!candidate} onClick={() => { setCandidate(""); setCandidateMode("已拒绝"); }}>拒绝</button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="suggestion">
+              <strong>{pane === "dashboard" ? "先资料，后正文" : "本页先手写"}</strong>
+              <p>{pane === "dashboard"
+                ? "打开作品先到概览。补齐大纲和世界观后，再点章节续写，模型会按资料约束，而不是自由发挥。"
+                : "AI 生成大纲/人物卡下一轮再接。现在写在这里的内容会自动保存，并在续写时作为硬约束。"}</p>
+              <div>
+                <button className="button" onClick={() => setPane("chapter")}>去写作台</button>
+              </div>
             </div>
-          </div>
+          )}
         </aside>
       </section>
+      <AppPrompt
+        open={prompt === "add-chapter"}
+        title="新章节名称"
+        value={promptValue}
+        confirmLabel="添加"
+        onChange={setPromptValue}
+        onCancel={() => setPrompt(null)}
+        onConfirm={() => {
+          const title = promptValue.trim();
+          if (!title) return;
+          setPrompt(null);
+          void addChapter(title);
+        }}
+      />
+      <AppPrompt
+        open={prompt === "rename-chapter"}
+        title="重命名章节"
+        value={promptValue}
+        confirmLabel="保存"
+        onChange={setPromptValue}
+        onCancel={() => setPrompt(null)}
+        onConfirm={() => {
+          const title = promptValue.trim();
+          if (!title) return;
+          setPrompt(null);
+          void renameChapter(title);
+        }}
+      />
+      <AppPrompt
+        open={prompt === "delete-chapter"}
+        title="删除章节"
+        hint={`删除「${currentChapter?.title ?? ""}」？此操作不可撤销。`}
+        showInput={false}
+        confirmLabel="删除"
+        danger
+        onCancel={() => setPrompt(null)}
+        onConfirm={() => { setPrompt(null); void removeChapter(); }}
+      />
+      <AppPrompt
+        open={prompt === "new-title"}
+        title="作品名称"
+        hint="这个文件夹还没有作品，创建后会作为新作品打开。"
+        value={promptValue}
+        confirmLabel="创建"
+        onChange={setPromptValue}
+        onCancel={() => setPrompt(null)}
+        onConfirm={() => void confirmNewInFolder()}
+      />
+      <AppPrompt
+        open={prompt === "preview"}
+        title="候选预览"
+        hint={candidate}
+        showInput={false}
+        confirmLabel="关闭"
+        onCancel={() => setPrompt(null)}
+        onConfirm={() => setPrompt(null)}
+      />
+      <AppPrompt
+        open={prompt === "find"}
+        title="查找正文"
+        value={promptValue}
+        confirmLabel="查找"
+        onChange={setPromptValue}
+        onCancel={() => setPrompt(null)}
+        onConfirm={() => {
+          (window as unknown as { find: (text: string) => boolean }).find(promptValue);
+          setPrompt(null);
+        }}
+      />
     </main>
   );
 }

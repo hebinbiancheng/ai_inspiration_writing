@@ -1,82 +1,169 @@
+import { useState } from "react";
+import { CaretRight } from "@phosphor-icons/react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { ProjectManifest } from "@domain";
 import { desktopHint, isDesktop } from "./desktop";
+import { AppPrompt } from "./AppPrompt";
+import { TitleBar } from "./TitleBar";
 import type { Project } from "./project";
+
+type OpenedProject = { root: string; manifest: ProjectManifest };
 
 type Props = {
   recents: Project[];
   modelLabel: string;
   configured: boolean;
+  worksDir: string;
   onOpenSettings: () => void;
   onOpenProject: (project: Project) => void;
   onRecentsChange: (projects: Project[]) => void;
 };
 
-export function HomeView({ recents, modelLabel, configured, onOpenSettings, onOpenProject, onRecentsChange }: Props) {
-  async function choose(createNew: boolean) {
-    if (!isDesktop()) {
-      window.alert(desktopHint());
-      return;
-    }
-    const selected = await open({ directory: true, multiple: false, title: createNew ? "选择空文件夹以新建作品" : "打开已有作品文件夹" });
-    if (typeof selected !== "string") return;
-    let manifest: ProjectManifest;
-    try {
-      manifest = await invoke<ProjectManifest>("read_manifest", { root: selected });
-      if (createNew && !window.confirm(`该文件夹已有作品「${manifest.title}」，要打开它吗？`)) return;
-    } catch {
-      const title = window.prompt("作品名称", "未命名故事")?.trim();
-      if (!title) return;
-      manifest = await invoke<ProjectManifest>("create_project", { root: selected, title, kind: "serial-novel" });
-    }
-    await invoke("remember_project", { root: selected });
-    const project = { root: selected, manifest };
-    const next = [project, ...recents.filter((item) => item.root !== selected)];
-    onRecentsChange(next);
+type PromptKind = "name" | "need-dir" | "browser" | "open-empty" | "error" | null;
+
+export function HomeView({ recents, modelLabel, configured, worksDir, onOpenSettings, onOpenProject, onRecentsChange }: Props) {
+  const [prompt, setPrompt] = useState<PromptKind>(null);
+  const [title, setTitle] = useState("未命名故事");
+  const [pendingRoot, setPendingRoot] = useState("");
+  const [errorText, setErrorText] = useState("");
+
+  async function rememberAndOpen(root: string, manifest: ProjectManifest) {
+    await invoke("remember_project", { root });
+    const project = { root, manifest };
+    onRecentsChange([project, ...recents.filter((item) => item.root !== root)]);
     onOpenProject(project);
+  }
+
+  async function startNew() {
+    if (!isDesktop()) { setPrompt("browser"); return; }
+    if (!worksDir) { setPrompt("need-dir"); return; }
+    setTitle("未命名故事");
+    setPrompt("name");
+  }
+
+  async function confirmNew() {
+    const nextTitle = title.trim();
+    if (!nextTitle) return;
+    try {
+      const created = await invoke<OpenedProject>("create_project_in_library", { title: nextTitle, kind: "serial-novel" });
+      setPrompt(null);
+      await rememberAndOpen(created.root, created.manifest);
+    } catch (error) {
+      setErrorText(String(error));
+      setPrompt("error");
+    }
+  }
+
+  async function openExisting() {
+    if (!isDesktop()) { setPrompt("browser"); return; }
+    const selected = await open({ directory: true, multiple: false, title: "打开已有作品文件夹" });
+    if (typeof selected !== "string") return;
+    try {
+      const manifest = await invoke<ProjectManifest>("read_manifest", { root: selected });
+      await rememberAndOpen(selected, manifest);
+    } catch {
+      setPendingRoot(selected);
+      setTitle("未命名故事");
+      setPrompt("open-empty");
+    }
+  }
+
+  async function confirmCreateInFolder() {
+    const nextTitle = title.trim();
+    if (!nextTitle || !pendingRoot) return;
+    try {
+      const manifest = await invoke<ProjectManifest>("create_project", { root: pendingRoot, title: nextTitle, kind: "serial-novel" });
+      setPrompt(null);
+      await rememberAndOpen(pendingRoot, manifest);
+    } catch (error) {
+      setErrorText(String(error));
+      setPrompt("error");
+    }
   }
 
   return (
     <main className="home app">
-      <header className="topbar">
-        <div className="brand"><span className="brand-mark">✦</span><span>灵感</span></div>
-        <div className="top-actions">
-          <span className="model-chip">{configured ? `已配置 · ${modelLabel}` : "未配置模型"}</span>
-          <button className="icon-button" aria-label="设置" onClick={onOpenSettings}>⚙</button>
-        </div>
-      </header>
+      <TitleBar
+        onOpenSettings={onOpenSettings}
+        trailing={
+          <span className={`model-chip ${configured ? "" : "warn"}`}>
+            {configured ? modelLabel : "未配置模型"}
+          </span>
+        }
+      />
       <section className="home-content">
-        <div className="home-hero">
-          <p className="eyebrow">LOCAL-FIRST</p>
-          <h1>工作台</h1>
-          <p>新建或打开本地作品，配置你自己的模型 API，然后进入章节写作。</p>
-        </div>
-        <div className="home-cards">
-          <div className="home-card primary">
-            <span>✦</span>
-            <h3>新建作品</h3>
-            <p>选择一个空文件夹，创建可迁移的作品目录。</p>
-            <button className="button" onClick={() => void choose(true)}>新建作品　＋</button>
+        <div className="home-library">
+          <div className="home-recent">
+            <h2>最近作品</h2>
+            {recents.length === 0 ? (
+              <p className="home-empty">还没有作品。新建或打开一个文件夹即可出现在这里。</p>
+            ) : recents.map((project) => (
+              <button className="recent-item" key={project.root} onClick={() => onOpenProject(project)}>
+                <span className="dot blue" />
+                <span>
+                  <strong>{project.manifest.title}</strong>
+                  <small>{project.root}</small>
+                </span>
+                <span className="chevron"><CaretRight size={16} weight="bold" /></span>
+              </button>
+            ))}
           </div>
-          <div className="home-card">
-            <span>▣</span>
-            <h3>打开已有作品</h3>
-            <p>从本地文件夹继续写作。</p>
-            <button className="button" onClick={() => void choose(false)}>选择文件夹　→</button>
-          </div>
-        </div>
-        <div className="home-recent">
-          <div className="section-heading"><h2>最近作品</h2></div>
-          {recents.length === 0 ? <p className="modal-hint">还没有作品。新建或打开一个文件夹即可出现在这里。</p> : recents.map((project) => (
-            <button className="recent-item" key={project.root} onClick={() => onOpenProject(project)}>
-              <span className="dot blue" />
-              <span><strong>{project.manifest.title}</strong><small>{project.root}</small></span>
-              <span>→</span>
-            </button>
-          ))}
+          <aside className="home-actions">
+            <button className="generate" onClick={() => void startNew()}>新建作品</button>
+            <button className="button" onClick={() => void openExisting()}>打开文件夹</button>
+            <p>{worksDir ? `会在「${worksDir}」下自动创建作品文件夹。` : "先在设置中选择保存位置，之后新建时会自动创建文件夹。"}</p>
+          </aside>
         </div>
       </section>
+
+      <AppPrompt
+        open={prompt === "name"}
+        title="作品名称"
+        hint="将在你设置的保存位置下自动创建同名文件夹。"
+        value={title}
+        confirmLabel="创建"
+        onChange={setTitle}
+        onCancel={() => setPrompt(null)}
+        onConfirm={() => void confirmNew()}
+      />
+      <AppPrompt
+        open={prompt === "need-dir"}
+        title="先选择保存位置"
+        hint="新建作品会自动创建文件夹，请先在设置中指定默认保存位置。"
+        showInput={false}
+        confirmLabel="去设置"
+        onCancel={() => setPrompt(null)}
+        onConfirm={() => { setPrompt(null); onOpenSettings(); }}
+      />
+      <AppPrompt
+        open={prompt === "browser"}
+        title="需要桌面应用"
+        hint={desktopHint()}
+        showInput={false}
+        confirmLabel="知道了"
+        onCancel={() => setPrompt(null)}
+        onConfirm={() => setPrompt(null)}
+      />
+      <AppPrompt
+        open={prompt === "open-empty"}
+        title="作品名称"
+        hint="这个文件夹还没有作品，创建后会作为新作品打开。"
+        value={title}
+        confirmLabel="创建"
+        onChange={setTitle}
+        onCancel={() => setPrompt(null)}
+        onConfirm={() => void confirmCreateInFolder()}
+      />
+      <AppPrompt
+        open={prompt === "error"}
+        title="无法创建作品"
+        hint={errorText}
+        showInput={false}
+        confirmLabel="知道了"
+        onCancel={() => setPrompt(null)}
+        onConfirm={() => setPrompt(null)}
+      />
     </main>
   );
 }

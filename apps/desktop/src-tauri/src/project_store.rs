@@ -46,6 +46,50 @@ fn safe_relative(relative_path: &str) -> Result<&Path, String> {
     Ok(relative)
 }
 
+pub fn folder_name_from_title(title: &str) -> String {
+    let forbidden = ['<', '>', '"', '/', '\\', '|', '?', '*', ':'];
+    let mut name: String = title.chars().map(|ch| if forbidden.contains(&ch) || ch.is_control() { '_' } else { ch }).collect();
+    name = name.trim().trim_matches('.').trim().to_string();
+    if name.is_empty() { "未命名故事".into() } else { name }
+}
+
+pub fn unique_project_root(base: &Path, title: &str) -> PathBuf {
+    let slug = folder_name_from_title(title);
+    let mut n = 0u32;
+    loop {
+        let name = if n == 0 { slug.clone() } else { format!("{slug}-{n}") };
+        let root = base.join(&name);
+        if !root.exists() || !manifest_path(&root).exists() {
+            return root;
+        }
+        n += 1;
+        if n > 999 {
+            return base.join(format!("{slug}-{}", now()));
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OpenedProject {
+    pub root: String,
+    pub manifest: ProjectManifest,
+}
+
+#[tauri::command]
+pub fn create_project_in_library(app: tauri::AppHandle, title: String, kind: String) -> Result<OpenedProject, String> {
+    let dir = app_data_dir(&app)?;
+    let settings = crate::secret_store::settings_read_at(&dir)?;
+    if settings.works_dir.trim().is_empty() {
+        return Err("请先在设置中选择作品保存位置".into());
+    }
+    let base = PathBuf::from(settings.works_dir.trim());
+    fs::create_dir_all(&base).map_err(|e| format!("无法创建保存目录：{e}"))?;
+    let root = unique_project_root(&base, &title);
+    fs::create_dir_all(&root).map_err(|e| e.to_string())?;
+    let manifest = create_project(root.to_string_lossy().into(), title, kind)?;
+    Ok(OpenedProject { root: root.to_string_lossy().into(), manifest })
+}
+
 #[tauri::command]
 pub fn create_project(root: String, title: String, kind: String) -> Result<ProjectManifest, String> {
     let root = PathBuf::from(root);
@@ -176,5 +220,21 @@ mod tests {
         forget_project_at(&data, "D:/novels/a").unwrap();
         assert_eq!(list_recent_at(&data).unwrap(), vec!["D:/novels/b".to_string()]);
         let _ = fs::remove_dir_all(data);
+    }
+
+    #[test]
+    fn folder_name_strips_invalid_chars() {
+        assert_eq!(folder_name_from_title(r#"春/秋:潮?"#), "春_秋_潮_");
+        assert_eq!(folder_name_from_title("   "), "未命名故事");
+    }
+
+    #[test]
+    fn unique_root_avoids_existing_manifest() {
+        let base = std::env::temp_dir().join(format!("lingan-unique-{}", now()));
+        fs::create_dir_all(base.join("测试作品")).unwrap();
+        fs::write(manifest_path(&base.join("测试作品")), "{}").unwrap();
+        let next = unique_project_root(&base, "测试作品");
+        assert_eq!(next.file_name().unwrap().to_string_lossy(), "测试作品-1");
+        let _ = fs::remove_dir_all(base);
     }
 }

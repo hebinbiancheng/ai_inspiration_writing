@@ -7,6 +7,9 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      if ("__TAURI_INTERNALS__" in window) document.documentElement.classList.add("is-desktop");
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

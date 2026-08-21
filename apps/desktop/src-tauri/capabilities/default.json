@@ -3,5 +3,17 @@
   "identifier": "default",
   "description": "Default permissions for the desktop workbench",
   "windows": ["main"],
-  "permissions": ["core:default", "dialog:default"]
+  "permissions": [
+    "core:default",
+    "dialog:default",
+    "core:window:allow-close",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-start-dragging",
+    "core:window:allow-set-effects",
+    "core:window:allow-is-maximized",
+    "core:window:allow-unminimize",
+    "core:window:allow-show",
+    "core:window:allow-set-focus"
+  ]
 }
