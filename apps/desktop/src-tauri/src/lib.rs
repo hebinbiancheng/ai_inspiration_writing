@@ -1,4 +1,5 @@
 mod project_store;
+mod secret_store;
 
 #[derive(serde::Deserialize)]
 struct OllamaResponse { response: String }
@@ -59,6 +60,11 @@ pub fn run() {
             project_store::remember_project,
             project_store::list_recent_projects,
             project_store::forget_project,
+            secret_store::profile_read,
+            secret_store::profile_save,
+            secret_store::secret_save_cmd,
+            secret_store::secret_has_cmd,
+            secret_store::secret_delete_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
