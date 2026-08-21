@@ -1,25 +1,24 @@
 export type ProjectKind = "serial-novel" | "long-form" | "short-story" | "script" | "interactive";
 
+export interface Chapter {
+  id: string;
+  title: string;
+  goal: string;
+}
+
 export interface ProjectManifest {
-  schemaVersion: number;
+  schema_version: number;
   id: string;
   title: string;
   kind: ProjectKind;
-  createdAt: string;
-  updatedAt: string;
+  created_at: string;
+  updated_at: string;
+  chapters: Chapter[];
 }
 
 export interface RichTextDocument {
   schemaVersion: number;
-  content: Record<string, unknown>;
-}
-
-export interface AiCandidate {
-  id: string;
   chapterId: string;
-  operation: "continue" | "rewrite" | "review";
-  status: "draft" | "accepted" | "discarded";
-  content: RichTextDocument;
-  reason: string;
-  model: string;
+  savedAt: string;
+  content: Record<string, unknown>;
 }
