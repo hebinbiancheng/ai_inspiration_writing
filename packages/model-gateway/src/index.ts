@@ -1,19 +1,10 @@
-export type ModelProvider = "openai-compatible" | "ollama" | "image";
-
-export interface ModelRequest {
-  provider: ModelProvider;
+export interface ModelProfile {
+  base_url: string;
   model: string;
+  profile_id: string;
+}
+
+export interface CompleteRequest {
+  profile_id: string;
   prompt: string;
-  temperature?: number;
-}
-
-export interface ModelEvent {
-  type: "delta" | "done" | "error";
-  text?: string;
-  message?: string;
-}
-
-export interface TextModelAdapter {
-  complete(request: ModelRequest): AsyncIterable<ModelEvent>;
-  cancel(taskId: string): Promise<void>;
 }

@@ -10,6 +10,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@domain": resolve(rootDir, "../../packages/domain/src/index.ts"),
+      "@gateway": resolve(rootDir, "../../packages/model-gateway/src/index.ts"),
     },
   },
 });
