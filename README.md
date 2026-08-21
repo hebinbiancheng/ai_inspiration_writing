@@ -30,7 +30,21 @@ npm run desktop     # 启动 Tauri 桌面开发版
 npm run desktop:build # 构建桌面安装包
 ```
 
-### 最终用户安装
+### macOS 开发与打包
+
+本项目使用 Tauri 2，已包含 macOS 原生钥匙串支持（`keyring` 的 `apple-native` feature）和 `.icns` 应用图标。macOS 需要 Xcode Command Line Tools、Rust stable 与 Node.js 18+：
+
+```bash
+xcode-select --install
+rustup default stable
+npm install --prefix apps/desktop
+npm run desktop       # 本地运行
+npm run desktop:build # 生成 .app / .dmg（按当前 CPU 架构）
+```
+
+macOS 使用系统钥匙串保存 API Key；自定义标题栏会为左上角红黄绿窗口按钮预留空间。若只运行浏览器预览，不需要 Rust，但本地文件、钥匙串和模型调用仍需桌面壳。
+
+### Windows 最终用户安装
 
 最终用户只需安装 `npm run desktop:build` 生成的 Windows 安装包，不需要安装 Node.js、Rust、Cargo 或 Tauri。Windows WebView2 运行时通常随系统提供；安装包也可以按发布配置负责引导安装缺失的运行时。
 

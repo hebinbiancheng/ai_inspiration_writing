@@ -1,9 +1,10 @@
-import { Effect, getCurrentWindow } from "@tauri-apps/api/window";
-import { isDesktop } from "./desktop";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { isDesktop, isMacOS } from "./desktop";
 
 export async function bootDesktopChrome() {
   if (!isDesktop()) return;
   document.documentElement.classList.add("is-desktop");
+  if (isMacOS()) document.documentElement.classList.add("is-macos");
   const window = getCurrentWindow();
   try {
     await window.unminimize();
@@ -11,14 +12,5 @@ export async function bootDesktopChrome() {
     await window.setFocus();
   } catch {
     // Window show permissions may be missing in browser preview.
-  }
-  try {
-    await window.setEffects({ effects: [Effect.Acrylic] });
-  } catch {
-    try {
-      await window.setEffects({ effects: [Effect.HudWindow] });
-    } catch {
-      // Browser preview and older WebView2 skip native acrylic.
-    }
   }
 }

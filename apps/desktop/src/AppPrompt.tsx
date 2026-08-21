@@ -28,8 +28,8 @@ export function AppPrompt({
   if (!open) return null;
   return (
     <div className="modal-backdrop" onMouseDown={onCancel}>
-      <section className="modal app-prompt" onMouseDown={(event) => event.stopPropagation()}>
-        <h2>{title}</h2>
+      <section className="modal app-prompt" role="dialog" aria-modal="true" aria-labelledby="prompt-title" onMouseDown={(event) => event.stopPropagation()}>
+        <h2 id="prompt-title">{title}</h2>
         {hint ? <p className="modal-hint">{hint}</p> : null}
         {showInput ? (
           <input

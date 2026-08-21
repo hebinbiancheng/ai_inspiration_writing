@@ -2,10 +2,7 @@ mod project_store;
 mod secret_store;
 mod model_gateway;
 
-use tauri::{
-  Manager,
-  window::{Effect, EffectsBuilder},
-};
+use tauri::Manager;
 
 #[tauri::command]
 fn ping() -> &'static str {
@@ -21,7 +18,6 @@ pub fn run() {
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
-        let _ = window.set_effects(EffectsBuilder::new().effect(Effect::Acrylic).build());
       }
       Ok(())
     })

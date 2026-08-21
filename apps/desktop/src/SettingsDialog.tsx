@@ -142,8 +142,8 @@ export function SettingsDialog({ open, onClose, onSaved }: Props) {
 
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
-      <section className="modal settings-modal" onMouseDown={(event) => event.stopPropagation()}>
-        <h2>AI 设置</h2>
+      <section className="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title" onMouseDown={(event) => event.stopPropagation()}>
+        <h2 id="settings-title">AI 设置</h2>
         {isDesktop() ? (
           <p className="modal-hint">可保存多套 OpenAI 兼容档案。API Key 写入系统凭据库，不会出现在作品文件夹里。新建作品会自动放进下面的保存位置。测试连接会先保存当前档案。</p>
         ) : (

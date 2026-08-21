@@ -25,7 +25,7 @@ export function KnowledgePane({ page, value, saveState, onChange }: Props) {
         onChange={(event) => onChange(event.target.value)}
         placeholder={page.placeholder}
       />
-      <footer className="editor-footer"><span>{saveState}</span><span>手写资料 · 续写时自动带入</span></footer>
+      <footer className="editor-footer"><span role="status">{saveState}</span><span>续写时自动带入</span></footer>
     </div>
   );
 }
