@@ -312,18 +312,18 @@ export function WorkbenchView({ project, profileId, modelLabel, configured, onOp
                   </div>
                   <button className="button" onClick={() => void snapshot()}>创建快照</button>
                 </div>
-                <div className="toolbar">
-                  <button onClick={() => editor?.chain().focus().toggleBold().run()} className={editor?.isActive("bold") ? "active" : ""}><b>B</b></button>
-                  <button onClick={() => editor?.chain().focus().toggleItalic().run()} className={editor?.isActive("italic") ? "active" : ""}><i>I</i></button>
-                  <button onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}>H</button>
-                  <button onClick={() => editor?.chain().focus().setParagraph().run()}>Aa</button>
-                  <button onClick={() => editor?.chain().focus().toggleBulletList().run()}>≡</button>
+                <div className="toolbar" role="toolbar" aria-label="正文格式">
+                  <button aria-label="加粗" onClick={() => editor?.chain().focus().toggleBold().run()} className={editor?.isActive("bold") ? "active" : ""}><b>B</b></button>
+                  <button aria-label="斜体" onClick={() => editor?.chain().focus().toggleItalic().run()} className={editor?.isActive("italic") ? "active" : ""}><i>I</i></button>
+                  <button aria-label="二级标题" onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}>H</button>
+                  <button aria-label="正文" onClick={() => editor?.chain().focus().setParagraph().run()}>Aa</button>
+                  <button aria-label="项目列表" onClick={() => editor?.chain().focus().toggleBulletList().run()}>≡</button>
                   <span className="toolbar-spacer" />
                   <button onClick={() => { setPromptValue(""); setPrompt("find"); }} aria-label="查找正文"><MagnifyingGlass size={16} weight="regular" /></button>
                 </div>
               </div>
               <div className="editor-scroll"><EditorContent className="manuscript" editor={editor} /></div>
-              <footer className="editor-footer"><span>{saveState}</span><span>{editor?.getText().length ?? 0} 字　· 作者创作</span></footer>
+              <footer className="editor-footer"><span role="status">{saveState}</span><span>{editor?.getText().length ?? 0} 字</span></footer>
             </>
           )}
         </section>
@@ -332,10 +332,9 @@ export function WorkbenchView({ project, profileId, modelLabel, configured, onOp
           <p className="context">当前上下文：{contextLabel}</p>
           {pane === "chapter" ? (
             <>
-              <div className="quick-actions"><button className="button" onClick={() => void generate()}>继续写</button></div>
-              <textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="告诉 AI 你想怎么续写…" />
+              <textarea aria-label="告诉 AI 续写要求" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="告诉 AI 你想怎么续写…" />
               <button className="generate" disabled={busy} onClick={() => void generate()}>{busy ? "生成中…" : "生成候选"}</button>
-              <div className="suggestion">
+              <div className="suggestion" aria-live="polite" aria-busy={busy}>
                 <strong>{candidateMode}</strong>
                 <p>{candidate || "生成会带上大纲、世界观等已填资料。空白资料页不会发明设定。"}</p>
                 <div>

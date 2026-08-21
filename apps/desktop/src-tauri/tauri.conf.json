@@ -15,18 +15,18 @@
         "title": "灵感",
         "width": 1440,
         "height": 900,
-        "minWidth": 1100,
+        "minWidth": 900,
         "minHeight": 700,
-        "decorations": false,
-        "transparent": true,
+        "decorations": true,
+        "transparent": false,
         "shadow": true,
-        "resizable": true,
-        "windowEffects": {
-          "effects": ["acrylic"]
-        }
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": { "x": 18, "y": 18 },
+        "resizable": true
       }
     ],
     "security": { "csp": null }
   },
-  "bundle": { "active": true, "targets": "all", "icon": ["icons/icon.ico"] }
+  "bundle": { "active": true, "targets": "all", "icon": ["icons/icon.ico", "icons/icon.icns"] }
 }
